@@ -3,7 +3,7 @@ import threading
 
 import pygame, random, pygame_gui
 from pygame.locals import *
-from planners.planners import ProbabilisticRoadmap, Color, RRT, PotentialField, CircularObstacle
+from planners.planners import Color, PotentialField, CircularObstacle
 from search.search import Dijkstra, AStar, GreedyBFS
 
 
@@ -37,33 +37,24 @@ def localize(map, pos):
 
 # TODO: start, goal collision checking
 def generate_obs(num_obstacles, map_pos, map_dim, obs_dim):
-    obs = []
-    for i in range(num_obstacles):
-        rect = None
-        collision = True
-        while collision:
-            pos = sample_envir(map_pos, map_dim, obs_dim)
-            size = (int(random.uniform(10, obs_dim[0])), int(random.uniform(10, obs_dim[1])))
-            rect = pygame.Rect(pos, size)
-            collision = False
-            for obj in obs:
-                if rect.colliderect(obj):
-                    collision = True
-                    break
-        obs.append(rect)
+    obs = [
+            pygame.Rect(100, 100, 50, 30),
+            pygame.Rect(300, 200, 80, 40)
+        ]
+
     return obs
 
 
 def generate_circle_obs(num_obstacles, map_pos, map_size, circle_obs_dim, goal_pose):
     obs = []
-    for i in range(num_obstacles):
-        collision = True
-        while collision:
-            pos = sample_envir(map_pos, map_size, (circle_obs_dim,circle_obs_dim))
-            rad = int(random.uniform(10, circle_obs_dim))
-            circle = CircularObstacle(*pos,rad)
-            collision = circle.collidepoint(goal_pose)
+    collision = True
+    while collision:
+        circle = CircularObstacle(100, 100, 150, 100)
+        collision = circle.collidepoint(goal_pose)
+        obs.append(circle)
 
+        circle = CircularObstacle(350, 400, 200, 150)
+        collision = circle.collidepoint(goal_pose)
         obs.append(circle)
     return obs
 
@@ -76,11 +67,11 @@ class App:
         # self.sc = 1
         self._running = True
         self._display_surf = None
-        self.size = self.width, self.height = int(1600 * self.sc), int(820 * self.sc) # og: 1600 x 820, test: 2000 x 900
+        self.size = self.width, self.height = 1200, 800 # og: 1600 x 820, test: 2000 x 900
 
         self.map = None
         self.map_pos = (0, int(0.12 * self.height))
-        self.map_size = self.mapw, self.maph = int(0.771 * self.width), int(0.87805 * self.height)
+        self.map_size = self.mapw, self.maph = 600, 600
 
         self.clock = pygame.time.Clock()
         self.dt = 0
@@ -94,8 +85,8 @@ class App:
         self.optionp_size = self.optionp_w, self.optionp_h = int(0.234375 * self.width), self.height
 
         self.planners = ['Probabilistic Roadmap', "RRT", "Potential Field"]
-        self.default_planner = 'RRT'
-        self.state = State.RRT
+        self.default_planner = 'Potential Field'
+        self.state = State.PF
 
         self.searches = ['Dijkstra', 'A*', 'Greedy Best First']
         self.default_search = 'A*'
@@ -107,9 +98,9 @@ class App:
         self._rect_start_pos = None
         self.num_obstacles = 20
 
-        self.start_pose = self.sx, self.sy = (20, 20)
+        self.start_pose = self.sx, self.sy = (50, 550)
         self.start_radius = 10
-        self.goal_pose = self.gx, self.gy = (int(0.5 * self.mapw), int(0.5 * self.maph))
+        self.goal_pose = self.gx, self.gy = (550, 50)
         self.goal_radius = 20
         self.node_radius = 5
 
@@ -600,22 +591,12 @@ class App:
 
         if self.state == State.PF:
             for obs in self.obstacles:
-                pygame.draw.circle(self.map, Color.LIGHT_PURPLE, (obs.x,obs.y), obs.rad, width=0)
+                pygame.draw.rect(self.map, Color.LIGHT_PURPLE, obs)
             self.planner.draw(self.map)
             for node in self.planner.path:
                 pygame.draw.circle(self.map, Color.LIGHT_BLUE, node.get_coords(), self.node_radius, width=0)
 
     def simulateState(self):
-        if self.state == State.PRM:
-            self.planner.create_network(self.map, self.node_radius, self.prm_options['neighbours'])
-            if self.t is None or not self.t.is_alive():
-                self.t = threading.Thread(target=self.search.solve, args=(
-                    self.planner.nodes, self.planner.get_start_node(), self.planner.get_end_node(),))
-                self.t.start()
-        if self.state == State.RRT:
-            if self.t is None or not self.t.is_alive():
-                self.t = threading.Thread(target=self.planner.start, daemon=True)
-                self.t.start()
         if self.state ==  State.PF:
             self.planner.updated = True
             if self.t is None or not self.t.is_alive():
